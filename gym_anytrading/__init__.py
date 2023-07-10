@@ -28,7 +28,7 @@ register(
     id='future-v0',
     entry_point='gym_anytrading.envs:FutureEnv',
     kwargs={
-        'df': deepcopy(datasets.STOCKS_GOOGL),
+        'df': deepcopy(datasets.RB_TICK),
         'window_size': 30,
         'frame_bound': (30, len(datasets.STOCKS_GOOGL))
     }

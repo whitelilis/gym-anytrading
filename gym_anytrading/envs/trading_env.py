@@ -29,7 +29,7 @@ class TradingEnv(gym.Env):
         self.window_size = window_size
         self.prices, self.signal_features = self._process_data()
         self.shape = window_size * self.signal_features.shape[1]
-        #print(f"shape is {self.shape}")
+        print(f"shape is {self.shape}")
         # spaces
         self.action_space = spaces.Discrete(len(Actions))
         self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(self.shape,), dtype=np.float32)

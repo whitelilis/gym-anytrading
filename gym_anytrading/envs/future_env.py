@@ -15,13 +15,13 @@ class FutureEnv(TradingEnv):
 
 
     def _process_data(self):
-        prices = self.df.loc[:, 'Close'].to_numpy()
+        prices = self.df.loc[:, 'lastPrice'].to_numpy()
 
         prices[self.frame_bound[0] - self.window_size]  # validate index (TODO: Improve validation)
         prices = prices[self.frame_bound[0]-self.window_size:self.frame_bound[1]]
 
         diff = np.insert(np.diff(prices), 0, 0)
-        signal_features = np.column_stack((prices, diff))
+        signal_features = self.df.loc[:, ['askVolume1', 'askVolume2', 'askVolume3', 'bidVolume1', 'bidVolume2', 'bidVolume3']].to_numpy()
 
         return prices, signal_features
 
