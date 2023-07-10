@@ -28,7 +28,7 @@ class TradingEnv(gym.Env):
         self.df = df
         self.window_size = window_size
         self.prices, self.signal_features = self._process_data()
-        self.shape = window_size * self.signal_features.shape[1]
+        self.shape = window_size * self.signal_features.shape[1] + 1 # add position
         print(f"shape is {self.shape}")
         # spaces
         self.action_space = spaces.Discrete(len(Actions))
@@ -46,6 +46,8 @@ class TradingEnv(gym.Env):
         self._total_reward = None
         self._total_profit = None
         self._first_rendering = None
+        self._last_step_fee = 0.0
+        self._last_step_reward = 0.0
         self.history = None
 
 
@@ -88,24 +90,29 @@ class TradingEnv(gym.Env):
                 self._position = Positions.Long
             if action == Actions.Sell.value:
                 self._position = Positions.Short
-        elif self._position == Positions.Long and action == Actions.Sell:
+        elif self._position == Positions.Long and action == Actions.Sell.value:
             self._position = Positions.Empty
-        elif self._position == Positions.Short and action == Actions.Buy:
+        elif self._position == Positions.Short and action == Actions.Buy.value:
             self._position = Positions.Empty
 
         self._position_history.append(self._position)
-        observation, info = self._get_observation()
+        observation, info = self._get_observation(action)
         self._update_history(info)
         return observation, step_reward, self._done, self._truncated, info
 
 
-    def _get_observation(self):
+    def _get_observation(self, action=None):
         info = {
+            "action": action,
+            "last_step_fee": self._last_step_fee,
+            "last_step_reward": self._last_step_reward,
             "total_reward": self._total_reward,
             "total_profit": self._total_profit,
             "position": self._position.value
         }
-        return self.signal_features[(self._current_tick-self.window_size+1):self._current_tick+1].flatten(), info
+        tick_feature = self.signal_features[(self._current_tick-self.window_size+1):self._current_tick+1].flatten()
+        obs = np.append(tick_feature, self._position.value)
+        return obs, info
 
 
     def _update_history(self, info):

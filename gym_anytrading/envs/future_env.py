@@ -11,7 +11,7 @@ class FutureEnv(TradingEnv):
         self.frame_bound = frame_bound
         super().__init__(df, window_size)
 
-        self.trade_fee = 0.4  # unit
+        self.trade_fee = 4  # unit
 
 
     def _process_data(self):
@@ -21,7 +21,7 @@ class FutureEnv(TradingEnv):
         prices = prices[self.frame_bound[0]-self.window_size:self.frame_bound[1]]
 
         diff = np.insert(np.diff(prices), 0, 0)
-        signal_features = self.df.loc[:, ['askVolume1', 'askVolume2', 'askVolume3', 'bidVolume1', 'bidVolume2', 'bidVolume3']].to_numpy()
+        signal_features = self.df.loc[:, ['lastPrice', 'askVolume1', 'askVolume2', 'askVolume3', 'bidVolume1', 'bidVolume2', 'bidVolume3']].to_numpy()
 
         return prices, signal_features
 
@@ -37,10 +37,15 @@ class FutureEnv(TradingEnv):
             factor = 0
 
         diff = self.prices[self._current_tick] - self.prices[self._current_tick - 1]
-        position_reward = factor * diff
-        #print(f"diff: {diff}, action: {action}, position reward: {position_reward}")
-        commission = 0 if action == Actions.Hold else -self.trade_fee
-
+        position_reward = 10 * factor * diff
+        self._last_step_reward = position_reward
+        commission = 0 
+        if action == Actions.Hold.value or (self._position == Positions.Long and action == Actions.Buy.value) or (self._position == Positions.Short and action == Actions.Sell.value):
+            commission = 0
+        else:
+            commission = -self.trade_fee
+        self._last_fee = commission
+        #print(f"diff: {diff}, action: {action}, position reward: {position_reward}, fee: {commission}")
         return position_reward + commission
 
 
