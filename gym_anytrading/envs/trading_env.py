@@ -29,10 +29,10 @@ class TradingEnv(gym.Env):
         self.window_size = window_size
         self.prices, self.signal_features = self._process_data()
         self.shape = window_size * self.signal_features.shape[1]
-        print(f"shape is {self.shape}")
+        #print(f"shape is {self.shape}")
         # spaces
         self.action_space = spaces.Discrete(len(Actions))
-        self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(self.shape,), dtype=np.float64)
+        self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(self.shape,), dtype=np.float32)
 
         # episode
         self._start_tick = self.window_size
@@ -68,6 +68,7 @@ class TradingEnv(gym.Env):
         return self._get_observation()
 
 
+
     def step(self, action):
         self._done = False
         self._current_tick += 1
@@ -83,14 +84,15 @@ class TradingEnv(gym.Env):
 
         # update position
         if self._position == Positions.Empty:
-            if action == Actions.Buy:
+            if action == Actions.Buy.value: # action maybe generate by model, which is a number, not Enum. 
                 self._position = Positions.Long
-            if action == Actions.Sell:
+            if action == Actions.Sell.value:
                 self._position = Positions.Short
         elif self._position == Positions.Long and action == Actions.Sell:
             self._position = Positions.Empty
         elif self._position == Positions.Short and action == Actions.Buy:
             self._position = Positions.Empty
+
         self._position_history.append(self._position)
         observation, info = self._get_observation()
         self._update_history(info)
