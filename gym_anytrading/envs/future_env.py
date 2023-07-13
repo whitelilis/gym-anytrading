@@ -11,7 +11,8 @@ class FutureEnv(TradingEnv):
         self.frame_bound = frame_bound
         super().__init__(df, window_size)
 
-        self.trade_fee = 4  # unit
+        self._trade_fee = 0.1  # unit
+        self._no_position_penalty = 0.01
 
 
     def _process_data(self):
@@ -20,14 +21,13 @@ class FutureEnv(TradingEnv):
         prices[self.frame_bound[0] - self.window_size]  # validate index (TODO: Improve validation)
         prices = prices[self.frame_bound[0]-self.window_size:self.frame_bound[1]]
 
-        diff = np.insert(np.diff(prices), 0, 0)
-        signal_features = self.df.loc[:, ['lastPrice', 'askVolume1', 'askVolume2', 'askVolume3', 'bidVolume1', 'bidVolume2', 'bidVolume3']].to_numpy()
+        self.df.loc[:, 'diff'] = self.df['lastPrice'].diff()
+        signal_features = self.df.loc[:, ['diff', 'lastPrice', 'askVolume1', 'askVolume2', 'askVolume3', 'bidVolume1', 'bidVolume2', 'bidVolume3']].to_numpy()
 
         return prices, signal_features
 
 
-    def _calculate_reward(self, action):
-
+    def _calculate_reward(self, ac):
         factor = 0
         if self._position == Positions.Long:
             factor = 1
@@ -37,44 +37,26 @@ class FutureEnv(TradingEnv):
             factor = 0
 
         diff = self.prices[self._current_tick] - self.prices[self._current_tick - 1]
-        position_reward = 10 * factor * diff
-        self._last_step_reward = position_reward
-        commission = 0 
-        if action == Actions.Hold.value or (self._position == Positions.Long and action == Actions.Buy.value) or (self._position == Positions.Short and action == Actions.Sell.value):
-            commission = 0
+        self._last_position_reward = factor * diff
+        if ac == Actions.Hold.value or (self._position == Positions.Long and ac == Actions.Buy.value) or (self._position == Positions.Short and ac == Actions.Sell.value):
+            self._last_fee = 0
         else:
-            commission = -self.trade_fee
-        self._last_fee = commission
-        #print(f"diff: {diff}, action: {action}, position reward: {position_reward}, fee: {commission}")
-        return position_reward + commission
+            self._last_fee = self._trade_fee
 
 
-    def _update_profit(self, action):
+        if (self._position == Positions.Long and ac == Actions.Buy.value) or (self._position == Positions.Short and ac == Actions.Sell.value) or (self._position == Positions.Empty):
+            self._last_penalty = self._no_position_penalty
+        else:
+            self._last_penalty = 0
+
+        hold_r = 1 if self._total_reward > 0 else -1
+
+        self._last_step_reward = self._last_position_reward - self._last_step_fee - self._last_penalty
+        return self._last_step_reward
+
+
+    def _update_profit(self, ac):
         pass
 
     def max_possible_profit(self):
-        current_tick = self._start_tick
-        last_trade_tick = current_tick - 1
-        profit = 1.
-
-        while current_tick <= self._end_tick:
-            position = None
-            if self.prices[current_tick] < self.prices[current_tick - 1]:
-                while (current_tick <= self._end_tick and
-                       self.prices[current_tick] < self.prices[current_tick - 1]):
-                    current_tick += 1
-                position = Positions.Short
-            else:
-                while (current_tick <= self._end_tick and
-                       self.prices[current_tick] >= self.prices[current_tick - 1]):
-                    current_tick += 1
-                position = Positions.Long
-
-            if position == Positions.Long:
-                current_price = self.prices[current_tick - 1]
-                last_trade_price = self.prices[last_trade_tick]
-                shares = profit / last_trade_price
-                profit = shares * current_price
-            last_trade_tick = current_tick - 1
-
-        return profit
+        pass

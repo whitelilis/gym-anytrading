@@ -21,6 +21,7 @@ class TradingEnv(gym.Env):
 
     metadata = {'render.modes': ['human']}
 
+
     def __init__(self, df, window_size):
         assert df.ndim == 2
 
@@ -28,7 +29,7 @@ class TradingEnv(gym.Env):
         self.df = df
         self.window_size = window_size
         self.prices, self.signal_features = self._process_data()
-        self.shape = window_size * self.signal_features.shape[1] + 1 # add position
+        self.shape = window_size * self.signal_features.shape[1] + 2 # add position, total_reward
         print(f"shape is {self.shape}")
         # spaces
         self.action_space = spaces.Discrete(len(Actions))
@@ -48,6 +49,8 @@ class TradingEnv(gym.Env):
         self._first_rendering = None
         self._last_step_fee = 0.0
         self._last_step_reward = 0.0
+        self._last_penalty = 0.0
+        self._last_position_reward = 0.0
         self.history = None
 
 
@@ -69,49 +72,53 @@ class TradingEnv(gym.Env):
         self.history = {}
         return self._get_observation()
 
-
+    def _update_position(self, ac):
+        if self._position == Positions.Empty:
+            if ac == Actions.Buy.value: # action maybe generate by model, which is a number, not Enum. 
+                self._position = Positions.Long
+            if ac == Actions.Sell.value:
+                self._position = Positions.Short
+        elif self._position == Positions.Long and ac == Actions.Sell.value:
+            self._position = Positions.Empty
+        elif self._position == Positions.Short and ac == Actions.Buy.value:
+            self._position = Positions.Empty
 
     def step(self, action):
+        ac = action.item(0)
         self._done = False
         self._current_tick += 1
 
         if self._current_tick == self._end_tick:
             self._done = True
 
-        step_reward = self._calculate_reward(action)
+        step_reward = self._calculate_reward(ac)
         self._total_reward += step_reward
 
-        self._update_profit(action)
+        self._update_profit(ac)
         self._last_trade_tick = self._current_tick
 
         # update position
-        if self._position == Positions.Empty:
-            if action == Actions.Buy.value: # action maybe generate by model, which is a number, not Enum. 
-                self._position = Positions.Long
-            if action == Actions.Sell.value:
-                self._position = Positions.Short
-        elif self._position == Positions.Long and action == Actions.Sell.value:
-            self._position = Positions.Empty
-        elif self._position == Positions.Short and action == Actions.Buy.value:
-            self._position = Positions.Empty
-
+        self._update_position(ac)
         self._position_history.append(self._position)
-        observation, info = self._get_observation(action)
+        observation, info = self._get_observation(ac)
         self._update_history(info)
         return observation, step_reward, self._done, self._truncated, info
 
 
-    def _get_observation(self, action=None):
+    def _get_observation(self, ac=None):
         info = {
-            "action": action,
+            "ac": ac,
             "last_step_fee": self._last_step_fee,
+            "last_penalty": self._last_penalty,
+            "last_position_reward": self._last_position_reward,
             "last_step_reward": self._last_step_reward,
             "total_reward": self._total_reward,
             "total_profit": self._total_profit,
             "position": self._position.value
         }
         tick_feature = self.signal_features[(self._current_tick-self.window_size+1):self._current_tick+1].flatten()
-        obs = np.append(tick_feature, self._position.value)
+        obs = np.append(tick_feature, self._position.value) # only support int
+        obs = np.append(obs, int(self._total_reward * 100)) # only support int
         return obs, info
 
 
@@ -145,7 +152,7 @@ class TradingEnv(gym.Env):
 
         _plot_position(self._position, self._current_tick)
 
-        plt.suptitle(
+        plt.subtitle(
             "Total Reward: %.6f" % self._total_reward + ' ~ ' +
             "Total Profit: %.6f" % self._total_profit
         )
@@ -194,11 +201,11 @@ class TradingEnv(gym.Env):
         raise NotImplementedError
 
 
-    def _calculate_reward(self, action):
+    def _calculate_reward(self, ac):
         raise NotImplementedError
 
 
-    def _update_profit(self, action):
+    def _update_profit(self, ac):
         raise NotImplementedError
 
 
