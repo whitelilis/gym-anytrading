@@ -7,3 +7,5 @@ venv*/
 dist/
 *.egg-info/
 build/
+tests/*.zip
+tests/tb_log
